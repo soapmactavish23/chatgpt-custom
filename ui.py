@@ -9,7 +9,9 @@ from unidecode import unidecode
 
 PASTA_MENSAGENS = Path(__file__).parent / 'mensagens'
 PASTA_MENSAGENS.mkdir(exist_ok=True)
-openai_key = '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'
+CACHE_DESCONVERTE = {}
+
+openai_key = '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'
 
 
 def retorna_resposta_modelo(mensagens,
@@ -31,6 +33,12 @@ def converte_nome_mensagem(nome_mensagem):
     nome_arquivo = re.sub(r'\W+', '', nome_arquivo).lower()
     return nome_arquivo
 
+def desconverte_nome_mensagem(nome_arquivo):
+    if not nome_arquivo in CACHE_DESCONVERTE:
+        nome_mensagem = ler_mensagem_por_nome_arquivo(nome_arquivo, key='nome_mensagem')
+        CACHE_DESCONVERTE[nome_arquivo] = nome_mensagem
+    return CACHE_DESCONVERTE[nome_arquivo]
+
 def retorna_nome_da_mensagem(mensagens):
     nome_mensagem = ''
     for mensagem in mensagens:
@@ -51,6 +59,11 @@ def salvar_mensagens(mensagens):
     with open(PASTA_MENSAGENS / nome_arquivo, 'wb') as f:
         pickle.dump(arquivo_salvar, f)
 
+def ler_mensagem_por_nome_arquivo(nome_arquivo, key = 'mensagem'):
+    with open(PASTA_MENSAGENS / nome_arquivo, 'rb') as f:
+        mensagens = pickle.load(f)
+    return mensagens[key]
+
 def ler_mensagens(mensagens, key = 'mensagem'):
     if len(mensagens) == 0:
         return []
@@ -60,15 +73,22 @@ def ler_mensagens(mensagens, key = 'mensagem'):
         mensagens = pickle.load(f)
     return mensagens[key]
 
+def listar_conversas():
+    conversas = list(PASTA_MENSAGENS.glob('*'))
+    conversas = sorted(conversas, key=lambda item: item.stat().st_mtime_ns, reverse=True)
+    return [c.stem for c in conversas]
+
+def inicializacao():
+    if not 'mensagens' in st.session_state:
+        st.session_state.mensagens = []
+    if not 'conversa_atual' in st.session_state:
+        st.session_state.conversa_atual = ''
 
 def pagina_principal():
 
-    if not 'mensagens' in st.session_state:
-        st.session_state.mensagens = []
-
     mensagens = ler_mensagens(st.session_state['mensagens'])
 
-    st.header('🤖 ChatGPT Customizado', divider=True)
+    st.header('🤖 ChatGPT Feito pelo Henrick Nogueira', divider=True)
 
     for mensagem in mensagens:
         chat = st.chat_message(mensagem['role'])
@@ -99,4 +119,37 @@ def pagina_principal():
         st.session_state['mensagens'] = mensagens
         salvar_mensagens(mensagens)
 
-pagina_principal()
+def tab_conversas(tab):
+    tab.button('+ Nova Conversa',
+               on_click=seleciona_conversa,
+               args=('', ),
+               use_container_width=True)
+    tab.markdown('')
+    conversas = listar_conversas()
+    for nome_arquivo in conversas:
+        nome_mensagem = desconverte_nome_mensagem(nome_arquivo).capitalize()
+        if len(nome_mensagem) == 30:
+            nome_mensagem += '...'
+        tab.button(nome_mensagem,
+                   on_click=seleciona_conversa,
+                   args=(nome_arquivo,),
+                   disabled=nome_arquivo==st.session_state['conversa_atual'],
+                   use_container_width=True)
+
+
+def seleciona_conversa(nome_arquivo):
+    if nome_arquivo == '':
+        st.session_state.mensagens = []
+    else:
+        mensagem = ler_mensagem_por_nome_arquivo(nome_arquivo)
+        st.session_state.mensagens = mensagem
+    st.session_state['conversa_atual'] = nome_arquivo
+
+def main():
+    inicializacao()
+    pagina_principal()
+    tab1, tab2 = st.sidebar.tabs(['Conversas', 'Configurações'])
+    tab_conversas(tab1)
+
+if __name__ == '__main__':
+    main()
