@@ -7,11 +7,11 @@ import openai
 
 from unidecode import unidecode
 
+PASTA_CONFIGURACOES = Path(__file__).parent / 'configuracoes'
+PASTA_CONFIGURACOES.mkdir(exist_ok=True)
 PASTA_MENSAGENS = Path(__file__).parent / 'mensagens'
 PASTA_MENSAGENS.mkdir(exist_ok=True)
 CACHE_DESCONVERTE = {}
-
-openai_key = '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'
 
 
 def retorna_resposta_modelo(mensagens,
@@ -78,11 +78,26 @@ def listar_conversas():
     conversas = sorted(conversas, key=lambda item: item.stat().st_mtime_ns, reverse=True)
     return [c.stem for c in conversas]
 
+def salva_chave(chave):
+    with open(PASTA_CONFIGURACOES / 'chave', 'wb') as f:
+        pickle.dump(chave, f)
+
+def le_chave():
+    if (PASTA_CONFIGURACOES / 'chave').exists():
+        with open(PASTA_CONFIGURACOES / 'chave', 'rb') as f:
+            return pickle.load(f)
+    else:
+        return ''
+
 def inicializacao():
     if not 'mensagens' in st.session_state:
         st.session_state.mensagens = []
     if not 'conversa_atual' in st.session_state:
         st.session_state.conversa_atual = ''
+    if not 'modelo' in st.session_state:
+        st.session_state.modelo = 'gpt-3.5-turbo'
+    if not 'api_key' in st.session_state:
+        st.session_state.api_key = le_chave()
 
 def pagina_principal():
 
@@ -96,28 +111,33 @@ def pagina_principal():
 
     prompt = st.chat_input('Fale com o chat')
     if prompt:
-        nova_mensagme = {'role': 'user', 'content': prompt}
-        chat = st.chat_message(nova_mensagme['role'])
-        chat.markdown(nova_mensagme['content'])
-        mensagens.append(nova_mensagme)
 
-        chat = st.chat_message('assistant')
-        placeholder = chat.empty()
-        placeholder.markdown("▌ ")
-        resposta_completa = ''
-        respostas = retorna_resposta_modelo(mensagens,
-                                            openai_key,
-                                            stream=True)
+        if st.session_state['api_key'] == '':
+            st.error('Adicione uma chave de api na aba de configurações')
+        else:
+            nova_mensagme = {'role': 'user', 'content': prompt}
+            chat = st.chat_message(nova_mensagme['role'])
+            chat.markdown(nova_mensagme['content'])
+            mensagens.append(nova_mensagme)
 
-        for resposta in respostas:
-            resposta_completa += resposta.choices[0].delta.get('content', '')
-            placeholder.markdown(resposta_completa + "▌ ")
-        placeholder.markdown(resposta_completa)
-        nova_mensagem = {'role': 'assistant', 'content': resposta_completa}
-        mensagens.append(nova_mensagem)
+            chat = st.chat_message('assistant')
+            placeholder = chat.empty()
+            placeholder.markdown("▌ ")
+            resposta_completa = ''
+            respostas = retorna_resposta_modelo(mensagens,
+                                                st.session_state['api_key'],
+                                                modelo=st.session_state['modelo'],
+                                                stream=True)
 
-        st.session_state['mensagens'] = mensagens
-        salvar_mensagens(mensagens)
+            for resposta in respostas:
+                resposta_completa += resposta.choices[0].delta.get('content', '')
+                placeholder.markdown(resposta_completa + "▌ ")
+            placeholder.markdown(resposta_completa)
+            nova_mensagem = {'role': 'assistant', 'content': resposta_completa}
+            mensagens.append(nova_mensagem)
+
+            st.session_state['mensagens'] = mensagens
+            salvar_mensagens(mensagens)
 
 def tab_conversas(tab):
     tab.button('+ Nova Conversa',
@@ -136,7 +156,6 @@ def tab_conversas(tab):
                    disabled=nome_arquivo==st.session_state['conversa_atual'],
                    use_container_width=True)
 
-
 def seleciona_conversa(nome_arquivo):
     if nome_arquivo == '':
         st.session_state.mensagens = []
@@ -145,11 +164,22 @@ def seleciona_conversa(nome_arquivo):
         st.session_state.mensagens = mensagem
     st.session_state['conversa_atual'] = nome_arquivo
 
+def tab_configuracoes(tab):
+    modelo_escolhido = tab.selectbox('Selecione o modelo', ['gpt-3.5-turbo', 'gpt-4'])
+    st.session_state['modelo'] = modelo_escolhido
+
+    chave = tab.text_input('Adicione sua api key', value = st.session_state['api_key'])
+    if chave != st.session_state['api_key']:
+        st.session_state['api_key'] = chave
+        salva_chave(chave)
+        tab.success('Chave salva com sucesso')
+
 def main():
     inicializacao()
     pagina_principal()
     tab1, tab2 = st.sidebar.tabs(['Conversas', 'Configurações'])
     tab_conversas(tab1)
+    tab_configuracoes(tab2)
 
 if __name__ == '__main__':
     main()
