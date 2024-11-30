@@ -55,7 +55,7 @@ def pagina_principal():
 
     mensagens = ler_mensagens(st.session_state['mensagens'])
 
-    st.header('🤖 ChatGPT Feito pelo Henrick Nogueira', divider=True)
+    st.header('🤖 ChatGPT Clone', divider=True)
 
     for mensagem in mensagens:
         chat = st.chat_message(mensagem['role'])
@@ -96,7 +96,7 @@ def pagina_principal():
 
     mensagens = ler_mensagens(st.session_state['mensagens'])
 
-    st.header('🤖 ChatGPT Feito pelo Henrick Nogueira', divider=True)
+    st.header('🤖 ChatGPT Clone', divider=True)
 
     for mensagem in mensagens:
         chat = st.chat_message(mensagem['role'])
